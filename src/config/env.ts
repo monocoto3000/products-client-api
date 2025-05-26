@@ -1,10 +1,20 @@
 import dotenv from 'dotenv';
-import path from 'path';
+
+dotenv.config();
 
 const env = process.env.NODE_ENV || 'dev';
+const upperEnv = env.toUpperCase();
 
-dotenv.config({ path: path.resolve(process.cwd(), `.env.${env}`) });
+console.log(`Uppercase Environment: ${upperEnv}`);
 
-console.log(`Loaded env file: .env.${env}`);
+export const config = {
+  env,
+  db: {
+    user: process.env[`DB_USER_${upperEnv}`]!,
+    password: process.env[`DB_PASSWORD_${upperEnv}`]!,
+    name: process.env[`DB_NAME_${upperEnv}`]!,
+    host: process.env[`DB_HOST_${upperEnv}`]!,
+    port: Number(process.env.DB_PORT || 3306),
+  },
+};
 
-export default env;

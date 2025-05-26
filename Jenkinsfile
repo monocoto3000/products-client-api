@@ -2,11 +2,11 @@ pipeline {
     agent any
 
     environment {
-        APP_NAME = 'notes-ms'
-        REPO_URL = 'https://github.com/monocoto3000/notes-ms.git'
+        APP_NAME = 'products-client-api'
+        REPO_URL = 'https://github.com/monocoto3000/products-client-api.git'
         SSH_CRED_ID = 'ssh-key-ec2'
         EC2_USER = 'ubuntu'
-        REMOTE_PATH = '/home/ubuntu/notes-ms'
+        REMOTE_PATH = '/home/ubuntu/products-client-api'
     }
 
     stages {
@@ -23,7 +23,7 @@ pipeline {
                     echo "Rama detectada: ${branch}"
 
                     switch(branch) {
-                        case 'master':
+                        case 'main':
                             env.DEPLOY_ENV = 'production'
                             env.EC2_IP = '107.22.77.233'
                             env.NODE_ENV = 'production'
