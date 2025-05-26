@@ -1,0 +1,49 @@
+{
+  "name": "products-api",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "cross-env NODE_ENV=dev ts-node-dev --respawn --transpile-only src/server.ts",
+    "qa": "cross-env NODE_ENV=qa ts-node-dev --respawn --transpile-only src/server.ts",
+    "prod": "cross-env NODE_ENV=prod node dist/server.js",
+
+    "migrate:dev": "cross-env NODE_ENV=dev sequelize-cli db:migrate --env dev",
+    "seed:dev": "cross-env NODE_ENV=dev sequelize-cli db:seed:all --env dev",
+    "undo:dev": "cross-env NODE_ENV=dev sequelize-cli db:migrate:undo:all --env dev",
+    "seed:undo:dev": "cross-env NODE_ENV=dev sequelize-cli db:seed:undo:all --env dev",
+
+    "migrate:qa": "cross-env NODE_ENV=qa sequelize-cli db:migrate --env qa",
+    "seed:qa": "cross-env NODE_ENV=qa sequelize-cli db:seed:all --env qa",
+    "undo:qa": "cross-env NODE_ENV=qa sequelize-cli db:migrate:undo:all --env qa",
+    "seed:undo:qa": "cross-env NODE_ENV=qa sequelize-cli db:seed:undo:all --env qa",
+
+    "migrate:prod": "cross-env NODE_ENV=prod sequelize-cli db:migrate --env prod",
+    "seed:prod": "cross-env NODE_ENV=prod sequelize-cli db:seed:all --env prod",
+    "undo:prod": "cross-env NODE_ENV=prod sequelize-cli db:migrate:undo:all --env prod",
+    "seed:undo:prod": "cross-env NODE_ENV=prod sequelize-cli db:seed:undo:all --env prod"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cross-env": "^7.0.3",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "mysql2": "^3.14.1",
+    "sequelize": "^6.37.7",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.2",
+    "@types/node": "^22.15.21",
+    "@types/sequelize": "^4.28.20",
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/swagger-ui-express": "^4.1.8",
+    "nodemon": "^3.1.10",
+    "sequelize-cli": "^6.6.3",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.8.3"
+  }
+}
