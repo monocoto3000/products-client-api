@@ -10,19 +10,14 @@ pipeline {
     }
 
     stages {
-        stage('Setup Environment') {
+        stage('Detect Branch & Set Environment') {
             steps {
                 script {
-                    def branch = env.GIT_BRANCH
-                    if (!branch) {
-                        env.DEPLOY_ENV = 'none'
-                        echo "No se detectó rama, no se desplegará."
-                        return
-                    }
+                    def branch = env.GIT_BRANCH ?: sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
                     branch = branch.replaceAll('origin/', '')
                     echo "Rama detectada: ${branch}"
 
-                    switch(branch) {
+                    switch (branch) {
                         case 'main':
                             env.DEPLOY_ENV = 'production'
                             env.EC2_IP = '44.205.201.108'
@@ -39,26 +34,21 @@ pipeline {
                             env.NODE_ENV = 'qa'
                             break
                         default:
-                            env.DEPLOY_ENV = 'none'
-                            echo "No hay despliegue configurado para esta rama: ${branch}"
+                            error("No hay entorno configurado para esta rama: ${branch}")
                     }
+
+                    env.BRANCH_NAME = branch
                 }
             }
         }
 
         stage('Checkout') {
-            when {
-                expression { env.DEPLOY_ENV != 'none' }
-            }
             steps {
-                git branch: env.GIT_BRANCH.replaceAll('origin/', ''), url: "${REPO_URL}"
+                git branch: env.BRANCH_NAME, url: "${REPO_URL}"
             }
         }
 
-        stage('Build') {
-            when {
-                expression { env.DEPLOY_ENV != 'none' }
-            }
+        stage('Install & Build') {
             steps {
                 sh 'rm -rf node_modules'
                 sh 'npm ci'
@@ -67,44 +57,33 @@ pipeline {
         }
 
         stage('Deploy') {
-            when {
-                expression { env.DEPLOY_ENV != 'none' }
-            }
             steps {
                 script {
                     def envSuffix = env.DEPLOY_ENV
-                    def sshKeyId = "ssh-key-ec2"
-                    def dbHostId = "db-host-${envSuffix}"
-                    def dbUserId = "db-user-${envSuffix}"
-                    def dbPassId = "db-pass-${envSuffix}"
-                    def dbNameId = "db-name-${envSuffix}"
-
                     withCredentials([
                         sshUserPrivateKey(credentialsId: SSH_CRED_ID, keyFileVariable: 'SSH_KEY'),
-                        string(credentialsId: dbHostId, variable: 'DB_HOST'),
-                        string(credentialsId: dbUserId, variable: 'DB_USER'),
-                        string(credentialsId: dbPassId, variable: 'DB_PASS'),
-                        string(credentialsId: dbNameId, variable: 'DB_NAME')
+                        string(credentialsId: "db-host-${envSuffix}", variable: 'DB_HOST'),
+                        string(credentialsId: "db-user-${envSuffix}", variable: 'DB_USER'),
+                        string(credentialsId: "db-pass-${envSuffix}", variable: 'DB_PASS'),
+                        string(credentialsId: "db-name-${envSuffix}", variable: 'DB_NAME')
                     ]) {
-                        sh 'chmod +x ./deploy.sh'    
-                        def branchName = env.GIT_BRANCH.replaceAll('origin/', '')
+                        sh 'chmod +x ./deploy.sh'
                         sh """
-                        SSH_KEY=\$SSH_KEY \
-                        EC2_USER=\$EC2_USER \
-                        EC2_IP=\$EC2_IP \
-                        REMOTE_PATH=\$REMOTE_PATH \
-                        REPO_URL=\$REPO_URL \
-                        APP_NAME=\$APP_NAME \
-                        NODE_ENV=\$NODE_ENV \
-                        GIT_BRANCH=${branchName} \
-                        DB_HOST=\$DB_HOST \
-                        DB_USER=\$DB_USER \
-                        DB_PASS=\$DB_PASS \
-                        DB_NAME=\$DB_NAME \
+                        SSH_KEY=$SSH_KEY \
+                        EC2_USER=$EC2_USER \
+                        EC2_IP=$EC2_IP \
+                        REMOTE_PATH=$REMOTE_PATH \
+                        REPO_URL=$REPO_URL \
+                        APP_NAME=$APP_NAME \
+                        NODE_ENV=$NODE_ENV \
+                        GIT_BRANCH=$BRANCH_NAME \
+                        DB_HOST=$DB_HOST \
+                        DB_USER=$DB_USER \
+                        DB_PASS=$DB_PASS \
+                        DB_NAME=$DB_NAME \
                         ./deploy.sh
                         """
                     }
-                    
                 }
             }
         }
@@ -112,10 +91,10 @@ pipeline {
 
     post {
         success {
-            echo "Despliegue exitoso en ${env.DEPLOY_ENV}"
+            echo "✅ Despliegue exitoso en '${env.DEPLOY_ENV}'."
         }
         failure {
-            echo "El despliegue en ${env.DEPLOY_ENV} ha fallado"
+            echo "❌ El despliegue en '${env.DEPLOY_ENV}' ha fallado."
         }
     }
 }
