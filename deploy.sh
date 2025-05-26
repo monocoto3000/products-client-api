@@ -97,13 +97,13 @@ fi
 
 # Crear archivo .env basado en el ambiente
 log "Configurando variables de entorno para $NODE_ENV..."
-ENV_CONTENT="PORT=3000
+ENV_CONTENT=\"PORT=3000
 NODE_ENV=$NODE_ENV
 DB_HOST=$DB_HOST
 DB_PORT=5432
 DB_USER=$DB_USER
 DB_PASSWORD=$DB_PASS
-DB_NAME=$DB_NAME"
+DB_NAME=$DB_NAME\"
 
 # Escribir .env en el servidor
 remote_exec "cat > $REMOTE_PATH/.env << 'EOF'
@@ -138,46 +138,58 @@ npm cache clean --force
 npm install --production
 "
 
-# Ejecutar migraciones de base de datos (si existen)
+# Ejecutar migraciones de base de datos
 log "Ejecutando migraciones de base de datos..."
+MIGRATE_SCRIPT="migrate:$NODE_ENV"
 remote_exec "
 cd $REMOTE_PATH
-if [ -f 'package.json' ] && npm run | grep -q 'migrate'; then
-    echo 'Ejecutando migraciones...'
-    npm run migrate || echo 'No se pudieron ejecutar migraciones, continuando...'
+if [ -f 'package.json' ] && npm run | grep -q \"\$MIGRATE_SCRIPT\"; then
+    echo 'Ejecutando migraciones con: \$MIGRATE_SCRIPT'
+    npm run \$MIGRATE_SCRIPT || echo 'No se pudieron ejecutar migraciones, continuando...'
 else
-    echo 'No se encontraron scripts de migración'
+    echo 'No se encontraron scripts de migración para \$MIGRATE_SCRIPT'
 fi
 "
 
+# Determinar archivo principal según el entorno
+if [ \"$NODE_ENV\" == \"prod\" ]; then
+    MAIN_FILE=\"dist/server.js\"
+else
+    MAIN_FILE=\"src/server.ts\"
+fi
+
+log \"Archivo principal detectado: \$MAIN_FILE\"
+
 # Crear archivo de configuración PM2
-log "Configurando PM2..."
-PM2_CONFIG="{
-  \"apps\": [{
-    \"name\": \"$APP_NAME-$NODE_ENV\",
-    \"script\": \"./app.js\",
-    \"cwd\": \"$REMOTE_PATH\",
-    \"env\": {
-      \"NODE_ENV\": \"$NODE_ENV\",
-      \"PORT\": \"3000\"
+log \"Configurando PM2...\"
+PM2_CONFIG=\"{
+  \\\"apps\\\": [{
+    \\\"name\\\": \\\"$APP_NAME-$NODE_ENV\\\",
+    \\\"script\\\": \\\"\$MAIN_FILE\\\",
+    \\\"cwd\\\": \\\"$REMOTE_PATH\\\",
+    \\\"env\\\": {
+      \\\"NODE_ENV\\\": \\\"$NODE_ENV\\\",
+      \\\"PORT\\\": \\\"3000\\\"
     },
-    \"instances\": 1,
-    \"exec_mode\": \"fork\",
-    \"watch\": false,
-    \"max_memory_restart\": \"1G\",
-    \"error_file\": \"./logs/err.log\",
-    \"out_file\": \"./logs/out.log\",
-    \"log_file\": \"./logs/combined.log\",
-    \"time\": true,
-    \"autorestart\": true,
-    \"restart_delay\": 1000
+    \\\"instances\\\": 1,
+    \\\"exec_mode\\\": \\\"fork\\\",
+    \\\"watch\\\": false,
+    \\\"max_memory_restart\\\": \\\"1G\\\",
+    \\\"error_file\\\": \\\"./logs/err.log\\\",
+    \\\"out_file\\\": \\\"./logs/out.log\\\",
+    \\\"log_file\\\": \\\"./logs/combined.log\\\",
+    \\\"time\\\": true,
+    \\\"autorestart\\\": true,
+    \\\"restart_delay\\\": 1000
   }]
-}"
+}\"
 
 remote_exec "
 cd $REMOTE_PATH
 mkdir -p logs
 echo '$PM2_CONFIG' > ecosystem.config.json
+echo 'Configuración PM2 creada:'
+cat ecosystem.config.json
 "
 
 # Detener aplicación existente
@@ -202,8 +214,12 @@ log "Verificando estado de la aplicación..."
 sleep 5
 remote_exec "
 cd $REMOTE_PATH
+echo '=== PM2 STATUS ==='
 pm2 status
-pm2 logs $APP_NAME-$NODE_ENV --lines 10
+echo '=== ÚLTIMOS 10 LOGS ==='
+pm2 logs $APP_NAME-$NODE_ENV --lines 10 --nostream
+echo '=== VERIFICANDO PROCESO ==='
+pm2 describe $APP_NAME-$NODE_ENV || echo 'Proceso no encontrado'
 "
 
 # Verificar endpoint de salud (opcional)
