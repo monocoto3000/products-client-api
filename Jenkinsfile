@@ -2,53 +2,63 @@ pipeline {
     agent any
 
     environment {
-        APP_NAME = 'products-client-api'
-        REPO_URL = 'https://github.com/monocoto3000/products-client-api.git'
+        APP_NAME = 'notes-ms'
+        REPO_URL = 'https://github.com/monocoto3000/notes-ms.git'
         SSH_CRED_ID = 'ssh-key-ec2'
         EC2_USER = 'ubuntu'
-        REMOTE_PATH = '/home/ubuntu/products-client-api'
+        REMOTE_PATH = '/home/ubuntu/notes-ms'
     }
 
     stages {
-        stage('Detect Branch & Set Environment') {
+        stage('Setup Environment') {
             steps {
                 script {
-                    def branch = env.GIT_BRANCH ?: sh(script: 'git rev-parse --abbrev-ref HEAD', returnStdout: true).trim()
+                    def branch = env.GIT_BRANCH
+                    if (!branch) {
+                        env.DEPLOY_ENV = 'none'
+                        echo "No se detectó rama, no se desplegará."
+                        return
+                    }
                     branch = branch.replaceAll('origin/', '')
                     echo "Rama detectada: ${branch}"
 
-                    switch (branch) {
-                        case 'main':
+                    switch(branch) {
+                        case 'master':
                             env.DEPLOY_ENV = 'production'
-                            env.EC2_IP = '44.205.201.108'
+                            env.EC2_IP = '107.22.77.233'
                             env.NODE_ENV = 'production'
                             break
                         case 'dev':
                             env.DEPLOY_ENV = 'development'
-                            env.EC2_IP = '107.22.77.233'
+                            env.EC2_IP = '44.210.28.87'
                             env.NODE_ENV = 'development'
                             break
                         case 'qa':
                             env.DEPLOY_ENV = 'qa'
-                            env.EC2_IP = '3.227.65.63'
+                            env.EC2_IP = '52.45.170.88'
                             env.NODE_ENV = 'qa'
                             break
                         default:
-                            error("No hay entorno configurado para esta rama: ${branch}")
+                            env.DEPLOY_ENV = 'none'
+                            echo "No hay despliegue configurado para esta rama: ${branch}"
                     }
-
-                    env.BRANCH_NAME = branch
                 }
             }
         }
 
         stage('Checkout') {
+            when {
+                expression { env.DEPLOY_ENV != 'none' }
+            }
             steps {
-                git branch: env.BRANCH_NAME, url: "${REPO_URL}"
+                git branch: env.GIT_BRANCH.replaceAll('origin/', ''), url: "${REPO_URL}"
             }
         }
 
-        stage('Install & Build') {
+        stage('Build') {
+            when {
+                expression { env.DEPLOY_ENV != 'none' }
+            }
             steps {
                 sh 'rm -rf node_modules'
                 sh 'npm ci'
@@ -57,33 +67,44 @@ pipeline {
         }
 
         stage('Deploy') {
+            when {
+                expression { env.DEPLOY_ENV != 'none' }
+            }
             steps {
                 script {
                     def envSuffix = env.DEPLOY_ENV
+                    def sshKeyId = "ssh-key-ec2"
+                    def dbHostId = "db-host-${envSuffix}"
+                    def dbUserId = "db-user-${envSuffix}"
+                    def dbPassId = "db-pass-${envSuffix}"
+                    def dbNameId = "db-name-${envSuffix}"
+
                     withCredentials([
                         sshUserPrivateKey(credentialsId: SSH_CRED_ID, keyFileVariable: 'SSH_KEY'),
-                        string(credentialsId: "db-host-${envSuffix}", variable: 'DB_HOST'),
-                        string(credentialsId: "db-user-${envSuffix}", variable: 'DB_USER'),
-                        string(credentialsId: "db-pass-${envSuffix}", variable: 'DB_PASS'),
-                        string(credentialsId: "db-name-${envSuffix}", variable: 'DB_NAME')
+                        string(credentialsId: dbHostId, variable: 'DB_HOST'),
+                        string(credentialsId: dbUserId, variable: 'DB_USER'),
+                        string(credentialsId: dbPassId, variable: 'DB_PASS'),
+                        string(credentialsId: dbNameId, variable: 'DB_NAME')
                     ]) {
-                        sh 'chmod +x ./deploy.sh'
+                        sh 'chmod +x ./deploy.sh'    
+                        def branchName = env.GIT_BRANCH.replaceAll('origin/', '')
                         sh """
-                        SSH_KEY=$SSH_KEY \
-                        EC2_USER=$EC2_USER \
-                        EC2_IP=$EC2_IP \
-                        REMOTE_PATH=$REMOTE_PATH \
-                        REPO_URL=$REPO_URL \
-                        APP_NAME=$APP_NAME \
-                        NODE_ENV=$NODE_ENV \
-                        GIT_BRANCH=$BRANCH_NAME \
-                        DB_HOST=$DB_HOST \
-                        DB_USER=$DB_USER \
-                        DB_PASS=$DB_PASS \
-                        DB_NAME=$DB_NAME \
+                        SSH_KEY=\$SSH_KEY \
+                        EC2_USER=\$EC2_USER \
+                        EC2_IP=\$EC2_IP \
+                        REMOTE_PATH=\$REMOTE_PATH \
+                        REPO_URL=\$REPO_URL \
+                        APP_NAME=\$APP_NAME \
+                        NODE_ENV=\$NODE_ENV \
+                        GIT_BRANCH=${branchName} \
+                        DB_HOST=\$DB_HOST \
+                        DB_USER=\$DB_USER \
+                        DB_PASS=\$DB_PASS \
+                        DB_NAME=\$DB_NAME \
                         ./deploy.sh
                         """
                     }
+                    
                 }
             }
         }
@@ -91,10 +112,10 @@ pipeline {
 
     post {
         success {
-            echo "✅ Despliegue exitoso en '${env.DEPLOY_ENV}'."
+            echo "Despliegue exitoso en ${env.DEPLOY_ENV}"
         }
         failure {
-            echo "❌ El despliegue en '${env.DEPLOY_ENV}' ha fallado."
+            echo "El despliegue en ${env.DEPLOY_ENV} ha fallado"
         }
     }
 }
