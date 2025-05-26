@@ -1,11 +1,7 @@
 #!/bin/bash
-
-# Script de despliegue para API REST con Express y Sequelize
-# Funciona con Jenkins pipeline para diferentes ambientes (dev, qa, prod)
-
 set -e
 
-# Colores para output
+# Colores para output 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -46,7 +42,7 @@ remote_exec() {
     $SSH_CMD "$1"
 }
 
-# Verificar conexión
+# --- Paso 1: Verificar conexión SSH ---
 log "Verificando conectividad SSH..."
 if ! $SSH_CMD "echo 'Conexión SSH exitosa'"; then
     error "No se pudo conectar a $EC2_IP"
@@ -54,11 +50,11 @@ if ! $SSH_CMD "echo 'Conexión SSH exitosa'"; then
 fi
 success "Conexión SSH establecida"
 
-# Preparar directorio
-log "Preparando directorio..."
+# --- Paso 2: Preparar directorio ---
+log "Preparando directorio remoto..."
 remote_exec "mkdir -p $REMOTE_PATH"
 
-# Clonar o actualizar repo
+# --- Paso 3: Clonar/Actualizar repo ---
 log "Sincronizando código fuente..."
 remote_exec "
 if [ -d '$REMOTE_PATH/.git' ]; then
@@ -72,19 +68,27 @@ else
 fi
 "
 
-# Escribir archivo .env
-log "Configurando archivo .env..."
-remote_exec "cat <<EOF > $REMOTE_PATH/.env
+# --- Paso 4: Configurar archivo .env ---
+log "Generando archivo .env.${NODE_ENV}..."
+remote_exec "cat <<EOF > $REMOTE_PATH/.env.${NODE_ENV}
 PORT=3000
-NODE_ENV=$NODE_ENV
-DB_HOST=$DB_HOST
-DB_PORT=5432
-DB_USER=$DB_USER
-DB_PASSWORD=$DB_PASS
-DB_NAME=$DB_NAME
+NODE_ENV=${NODE_ENV}
+DB_HOST=${DB_HOST}
+DB_PORT=3306
+DB_USER=${DB_USER}
+DB_PASSWORD=${DB_PASS}
+DB_NAME=${DB_NAME}
+DB_DIALECT=mysql  
 EOF"
 
-# Instalar Node.js y PM2 si no existen
+# Crear symlink para .env
+remote_exec "
+cd $REMOTE_PATH
+ln -sf .env.${NODE_ENV} .env
+"
+
+# --- Paso 5: Instalar Node.js y PM2 ---
+log "Instalando Node.js y PM2..."
 remote_exec "
 if ! command -v node &>/dev/null; then
     curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
@@ -95,7 +99,7 @@ if ! command -v pm2 &>/dev/null; then
 fi
 "
 
-# Instalar dependencias
+# --- Paso 6: Instalar dependencias ---
 log "Instalando dependencias..."
 remote_exec "
 cd $REMOTE_PATH
@@ -104,86 +108,72 @@ npm cache clean --force
 npm install --production
 "
 
-# Ejecutar migraciones si existen
+# --- Paso 7: Validar conexión a MySQL ---
+log "Validando conexión a MySQL..."
+remote_exec "
+if ! mysql -h $DB_HOST -u $DB_USER -p$DB_PASS -e 'SELECT 1' &>/dev/null; then
+    echo '❌ Error: No se pudo conectar a MySQL'
+    exit 1
+fi
+echo '✅ MySQL accesible'
+"
+
+# --- Paso 8: Ejecutar migraciones ---
 log "Ejecutando migraciones..."
 remote_exec "
 cd $REMOTE_PATH
 if npm run | grep -q 'migrate:$NODE_ENV'; then
-    npm run migrate:$NODE_ENV || echo 'Migración falló o no era necesaria'
-else
-    echo 'No se encontró script migrate:$NODE_ENV'
+    npm run migrate:$NODE_ENV || echo '⚠️ Migración falló o no era necesaria'
 fi
 "
 
-# Detectar archivo principal
-MAIN_FILE="src/server.ts"
-[[ "$NODE_ENV" == "prod" ]] && MAIN_FILE="dist/server.js"
-log "Archivo principal: $MAIN_FILE"
-
-# Crear configuración PM2
-log "Creando configuración PM2..."
+# --- Paso 9: Configurar PM2 ---
+log "Configurando PM2..."
 remote_exec "mkdir -p $REMOTE_PATH/logs"
 remote_exec "cat <<EOF > $REMOTE_PATH/ecosystem.config.json
 {
   \"apps\": [{
     \"name\": \"$APP_NAME-$NODE_ENV\",
-    \"script\": \"$MAIN_FILE\",
+    \"script\": \"dist/server.js\",
     \"cwd\": \"$REMOTE_PATH\",
     \"env\": {
-      \"NODE_ENV\": \"$NODE_ENV\",
-      \"PORT\": \"3000\"
+      \"NODE_ENV\": \"$NODE_ENV\"
     },
-    \"instances\": 1,
-    \"exec_mode\": \"fork\",
-    \"watch\": false,
-    \"max_memory_restart\": \"1G\",
-    \"error_file\": \"./logs/err.log\",
-    \"out_file\": \"./logs/out.log\",
-    \"log_file\": \"./logs/combined.log\",
-    \"time\": true,
-    \"autorestart\": true,
-    \"restart_delay\": 1000
+    \"error_file\": \"$REMOTE_PATH/logs/err.log\",
+    \"out_file\": \"$REMOTE_PATH/logs/out.log\",
+    \"merge_logs\": true,
+    \"autorestart\": true
   }]
 }
 EOF"
 
-# Reiniciar la app con PM2
-log "Reiniciando aplicación en PM2..."
+# --- Paso 10: Reiniciar aplicación ---
+log "Reiniciando aplicación..."
 remote_exec "
 cd $REMOTE_PATH
-pm2 stop $APP_NAME-$NODE_ENV || true
 pm2 delete $APP_NAME-$NODE_ENV || true
 pm2 start ecosystem.config.json
 pm2 save
-pm2 startup || echo 'Startup ya estaba configurado'
+pm2 startup || true
 "
 
-# Verificar estado
-log "Verificando estado de la aplicación..."
+# --- Paso 11: Verificar estado ---
+log "Verificando estado..."
 remote_exec "
 cd $REMOTE_PATH
-pm2 status
-pm2 logs $APP_NAME-$NODE_ENV --lines 10 --nostream
+pm2 list
+pm2 logs --lines 10 --nostream
 "
 
-# Comprobar healthcheck
-log "Comprobando endpoint /health..."
+# --- Paso 12: Health Check ---
+log "Comprobando health check..."
 remote_exec "
 sleep 10
-curl -fs http://localhost:3000/health && echo 'Aplicación saludable' || echo 'Advertencia: /health no respondió'
+curl -fs http://localhost:3000/health && echo '✅ Health check OK' || echo '❌ Health check falló'
 "
 
-# Limpiar logs viejos
-log "Limpiando archivos temporales..."
-remote_exec "
-cd $REMOTE_PATH
-rm -rf .git/hooks/*
-find . -name '*.log' -type f -mtime +7 -delete || true
-"
-
-# Resultado final
-success "¡Despliegue completado exitosamente!"
-log "Ambiente: $NODE_ENV"
-log "Servidor: $EC2_IP"
-log "Aplicación: $APP_NAME-$NODE_ENV"
+# --- Resultado final ---
+success "¡Despliegue completado en $NODE_ENV!"
+log "App: $APP_NAME-$NODE_ENV"
 log "Ruta: $REMOTE_PATH"
+log "Endpoint: http://$EC2_IP:3000"
