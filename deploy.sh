@@ -42,11 +42,17 @@ DB_PORT=3306
 PORT=3000
 ENV
 
-  echo "📦 Instalando dependencias"
+  echo "📦 Instalando todas las dependencias (incluyendo dev)"
   npm ci
 
   echo "🏗️ Compilando TypeScript"
   npm run build
+
+  echo "🧹 Limpiando node_modules"
+  rm -rf node_modules
+
+  echo "📦 Instalando solo dependencias de producción"
+  npm ci --production
 
   echo "🚦 Reiniciando servidor con PM2"
   pm2 delete $APP_NAME || true
