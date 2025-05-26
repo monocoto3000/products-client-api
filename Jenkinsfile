@@ -68,18 +68,43 @@ pipeline {
 
         stage('Deploy') {
             when {
-                expression { env.DEPLOY_ENV == 'production' }
+                expression { env.DEPLOY_ENV != 'none' }
             }
             steps {
-                withCredentials([
-                    sshUserPrivateKey(credentialsId: SSH_CRED_ID, keyFileVariable: 'SSH_KEY'),
-                    string(credentialsId: "db-host-production", variable: 'DB_HOST'),
-                    string(credentialsId: "db-user-production", variable: 'DB_USER'),
-                    string(credentialsId: "db-pass-production", variable: 'DB_PASS'),
-                    string(credentialsId: "db-name-production", variable: 'DB_NAME')
-                ]) {
-                    sh 'chmod +x deploy-prod.sh'
-                    sh './deploy-prod.sh'
+                script {
+                    def envSuffix = env.DEPLOY_ENV
+                    def sshKeyId = "ssh-key-ec2"
+                    def dbHostId = "db-host-${envSuffix}"
+                    def dbUserId = "db-user-${envSuffix}"
+                    def dbPassId = "db-pass-${envSuffix}"
+                    def dbNameId = "db-name-${envSuffix}"
+
+                    withCredentials([
+                        sshUserPrivateKey(credentialsId: SSH_CRED_ID, keyFileVariable: 'SSH_KEY'),
+                        string(credentialsId: dbHostId, variable: 'DB_HOST'),
+                        string(credentialsId: dbUserId, variable: 'DB_USER'),
+                        string(credentialsId: dbPassId, variable: 'DB_PASS'),
+                        string(credentialsId: dbNameId, variable: 'DB_NAME')
+                    ]) {
+                        sh 'chmod +x ./deploy.sh'    
+                        def branchName = env.GIT_BRANCH.replaceAll('origin/', '')
+                        sh """
+                        SSH_KEY=\$SSH_KEY \
+                        EC2_USER=\$EC2_USER \
+                        EC2_IP=\$EC2_IP \
+                        REMOTE_PATH=\$REMOTE_PATH \
+                        REPO_URL=\$REPO_URL \
+                        APP_NAME=\$APP_NAME \
+                        NODE_ENV=\$NODE_ENV \
+                        GIT_BRANCH=${branchName} \
+                        DB_HOST=\$DB_HOST \
+                        DB_USER=\$DB_USER \
+                        DB_PASS=\$DB_PASS \
+                        DB_NAME=\$DB_NAME \
+                        ./deploy.sh
+                        """
+                    }
+                    
                 }
             }
         }
