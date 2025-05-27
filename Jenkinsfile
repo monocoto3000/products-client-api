@@ -86,7 +86,7 @@ pipeline {
                         string(credentialsId: dbPassId, variable: 'DB_PASS'),
                         string(credentialsId: dbNameId, variable: 'DB_NAME')
                     ]) {
-                        sh 'chmod +x ./deploy.sh'    
+                        sh 'chmod +x ./scripts/deploy.sh'     
                         def branchName = env.GIT_BRANCH.replaceAll('origin/', '')
                         sh """
                         SSH_KEY=\$SSH_KEY \
@@ -101,7 +101,7 @@ pipeline {
                         DB_USER=\$DB_USER \
                         DB_PASS=\$DB_PASS \
                         DB_NAME=\$DB_NAME \
-                        ./deploy.sh
+                        ./scripts/deploy.sh
                         """
                     }
                     
