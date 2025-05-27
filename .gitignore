@@ -1,6 +1,7 @@
 .env.dev
 .env.prod
 .env.qa
+.env
 
 /node_modules
 /dist
