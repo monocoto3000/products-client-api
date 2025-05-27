@@ -1,15 +1,15 @@
 {
   "compilerOptions": {
-    "target": "ES2020",               // Versión de JavaScript de salida
+    "target": "ES2020",              
     "module": "commonjs",             
-    "outDir": "./dist",               // ⚠️¡Añade esto! (Carpeta de salida)
-    "rootDir": "./src",               // ⚠️¡Añade esto! (Carpeta de entrada)
+    "outDir": "./dist",             
+    "rootDir": "./src",           
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,
     "skipLibCheck": true,
-    "sourceMap": true                 // Opcional: para debugging
+    "sourceMap": true                 
   },
-  "include": ["src/**/*.ts"],         // ⚠️¡Añade esto! (Qué archivos compilar)
-  "exclude": ["node_modules"]         // Opcional: excluye dependencias
+  "include": ["src/**/*.ts"],        
+  "exclude": ["node_modules"]        
 }
