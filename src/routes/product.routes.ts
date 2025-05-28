@@ -108,6 +108,6 @@ router.get('/search/by-price', controller.getByPriceRange);
  *       200:
  *         description: List of products by category
  */
-router.get('/search/by-category', controller.getByCategory);
+router.get('/search/by-category', controller.getByCategory as any);
 
 export default router;

@@ -16,7 +16,7 @@ export class ProductController {
 
   getById = async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = String(req.params.id);
       const product = await productService.getProductById(id);
       res.json(product);
     } catch (error) {
@@ -49,13 +49,10 @@ getByName = async (req: Request, res: Response, next: NextFunction) => {
       try {
         const categoryIdRaw = req.query.category;
         
-        if (typeof categoryIdRaw !== 'string') {
-          throw new Error('Category query parameter must be a string');
-        }
-        
-        const categoryId = Number(categoryIdRaw);
-        if (isNaN(categoryId)) {
-          throw new Error('Category query parameter must be a valid number');
+        const categoryId = String(categoryIdRaw);
+
+        if (!categoryId) {
+          return res.status(400).json({ error: 'Category ID is required' });
         }
 
         const products = await productService.getProductsByCategory(categoryId);
