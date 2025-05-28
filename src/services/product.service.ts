@@ -22,7 +22,7 @@ export class ProductService {
     return products.map(toDTO);
   }
 
-  async getProductById(id: number): Promise<ProductDTO> {
+  async getProductById(id: string): Promise<ProductDTO> {
     const product = await Product.findOne({
       where: { id, availability: 1 },
       include: [{ model: Category, attributes: ['name'] }],
@@ -61,7 +61,7 @@ export class ProductService {
     return products.map(toDTO);
   }
 
-  async getProductsByCategory(categoryId: number): Promise<ProductDTO[]> {
+  async getProductsByCategory(categoryId: string): Promise<ProductDTO[]> {
     if (!categoryId) {
       throw new HttpException(400, 'La categoría es requerida');
     }
