@@ -35,8 +35,9 @@ router.get('/', controller.getAll);
  *         name: id
  *         required: true
  *         schema:
- *           type: integer
- *         description: Product ID
+ *           type: string
+ *           format: uuid
+ *         description: Product ID (UUID)
  *     responses:
  *       200:
  *         description: Product found
@@ -99,8 +100,10 @@ router.get('/search/by-price', controller.getByPriceRange);
  *       - in: query
  *         name: category
  *         schema:
- *           type: number
+ *           type: string
+ *           format: uuid
  *         required: true
+ *         description: Category ID (UUID)
  *     responses:
  *       200:
  *         description: List of products by category
