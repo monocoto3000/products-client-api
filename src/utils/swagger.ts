@@ -6,9 +6,9 @@ const options = {
   definition: {
     openapi: '3.0.0',
     info: {
-      title: 'Products Client API - QA Test #6.0',
+      title: 'Products Client API - DEV',
       version: '1.0.0',
-      description: 'Consult manager for Products QA',
+      description: 'Consult manager for Products DEV',
     },
     servers: [
       {
